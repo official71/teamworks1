@@ -89,7 +89,7 @@ def main(args):
             processed.add(doc.key)
             
             count = 0
-            for rt in parser.extract_relation(doc, relation, threshold):
+            for rt in parser.extract_relation(doc, relation):
                 # rt is a RelationTuple class instance
                 key = hash(rt)
                 if not key in tuples:
@@ -104,9 +104,12 @@ def main(args):
             print "Relations extracted from this website: {} (Overall: {})".format(
                 count, len(tuples))
 
-        print "Number of tuples with confidence above threshold: {}".format(len(tuples))
+        print "Pruning relations below threshold..."
+        pruned = sorted(filter(lambda x:x.prob >= threshold, tuples.values()), reverse=True)
+
+        print "Number of tuples after pruning: {}".format(len(pruned))
         print "================== ALL RELATIONS ================="
-        for rt in sorted(tuples.values(), reverse=True):
+        for rt in pruned:
             line = "Relation Type: %s | Confidence: %.3f |" % (relation, rt.prob)
             line += " Entity #1: {} ({})\t|".format(rt.value0, rt.type0)
             line += " Entity #2: {} ({})".format(rt.value1, rt.type1)
@@ -116,8 +119,8 @@ def main(args):
             print "No new tuples found. Shutting down..."
             break
 
-        if len(tuples) >= nr_tuples:
-            print "Program reached {} number of tuples. Shutting down...".format(len(tuples))
+        if len(pruned) >= nr_tuples:
+            print "Program reached {} number of tuples. Shutting down...".format(len(pruned))
             break
         
         if iteration > maxit:

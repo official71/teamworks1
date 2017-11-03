@@ -151,7 +151,6 @@ class NLPParser(object):
             # count number of named entities and filter sentences accordingly
             entity_counts = defaultdict(int)
             for token in sentence.tokens:
-                if token.word.lower() in ['redmond', 'microsoft']: print token.word, token.ner
                 entity_counts[token.ner] += 1
             # filter by named entity counts 
             if entity_filter(entity_counts):
@@ -170,14 +169,13 @@ class NLPParser(object):
     #  @param key key to the document, for caching, type: str
     #  @param lines texts to process, type: list(str)
     #  @param relation relation of interest (e.g. Work_In), type: str
-    #  @param threshold minimal confidence, type: float
     #  
     #  @ret list of relation descriptions (entity#1 value, entity#2 value, 
     #       entity#1 type, entity#2 type, confidence, sentence text), type: tuple
-    def __second_round(self, key, lines, relation, threshold):
+    def __second_round(self, key, lines, relation):
         if DEBUG:
-            # use hash value of url + relation + threshold to name the cache file
-            fname = "{}/2/{}.txt".format(self.cache_dir, abs(hash(key+relation+str(threshold))))
+            # use hash value of url + relation to name the cache file
+            fname = "{}/2/{}.txt".format(self.cache_dir, abs(hash(key+relation)))
             if os.path.exists(fname):
                 with open(fname, 'r') as f:
                     return [tuple(l.rstrip('\n').split('|')) for l in f]
@@ -187,24 +185,27 @@ class NLPParser(object):
         sentences = self.annotate(lines)
 
         res = []
-        threshold = float(threshold)
         for sentence in sentences:
             raw = "" # raw text of the sentence
             for rel in sentence.relations:
                 # each pair of relation in the sentence contains a relation type, 
-                # its probability (confidence), and a pair of entities with value and type
+                # its probability (confidence), and a pair of entities with value and type.
+                # skip the relationship pair if the confidence of the relation we are looking 
+                # for is not the highest among all relations
                 probabilities = rel.probabilities
-                if relation in probabilities and float(probabilities[relation]) >= threshold:
-                    e = rel.entities
-                    if len(e) == 2:
-                        if not raw:
-                            # construct the raw text of sentence now by 
-                            # joining the "word"s of its tokens
-                            raw = u' '.join([t.word for t in sentence.tokens]).encode('ascii', 'ignore')
-                        # append the relation description as a tuple to the results
-                        res.append((e[0].value.rstrip(), e[1].value.rstrip(), \
-                            e[0].type.rstrip(), e[1].type.rstrip(), \
-                            probabilities[relation], raw))
+                if float(probabilities.get(relation, -1)) < max(map(float, probabilities.values())):
+                    continue
+
+                e = rel.entities
+                if len(e) == 2:
+                    if not raw:
+                        # construct the raw text of sentence now by 
+                        # joining the "word"s of its tokens
+                        raw = u' '.join([t.word for t in sentence.tokens]).encode('ascii', 'ignore')
+                    # append the relation description as a tuple to the results
+                    res.append((e[0].value.rstrip(), e[1].value.rstrip(), \
+                        e[0].type.rstrip(), e[1].type.rstrip(), \
+                        probabilities[relation], raw))
         
         if DEBUG:
             with open(fname, 'w') as f:
@@ -217,17 +218,16 @@ class NLPParser(object):
     ## extract relation tuples from a search document
     #  @param doc the search document with scraped text, type: SearchDocument
     #  @param relation relation of interest (e.g. Work_In), type: str
-    #  @param threshold minimal confidence, type: float
     #  
     #  @ret list of relation tuples, type: list(RelationTuple)
-    def extract_relation(self, doc, relation, threshold=0):
+    def extract_relation(self, doc, relation):
         key = doc.key
 
         # first round, screen sentences
         lines = self.__first_round(key, doc.text.split('\n'), relation)
         
         # second round, get relations
-        relations = self.__second_round(key, lines, relation, threshold)
+        relations = self.__second_round(key, lines, relation)
 
         # combine relation tuples with same entities
         res = {}
