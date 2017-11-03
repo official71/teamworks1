@@ -22,7 +22,7 @@
 * __argparse__, argument parsing
 * Main function help message:
 
-```bash
+```
 $ python main.py -h
 usage: main.py [-h] api engine relation threshold query nr_tuples
 
@@ -56,5 +56,5 @@ optional arguments:
 
 ### Keys
 
-API: 
-Search engine: 
+* API: 
+* Search engine: 
